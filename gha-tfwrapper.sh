@@ -14,7 +14,7 @@ target=$(echo "$target" | sed 's|/\.terragrunt-cache/.*||')
 if [ "$command" == "plan" ]; then
   tfcmt -var "target:${target}" plan -patch -- terraform "$command" "$@"
 elif [ "$command" == "apply" ]; then
-  tfcmt -var "target:${target}" apply -patch -- terraform "$command" "$@"
+  tfcmt -var "target:${target}" apply -- terraform "$command" "$@"
 else
   terraform "$command" "$@"
 fi
