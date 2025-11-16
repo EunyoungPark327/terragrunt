@@ -12,7 +12,7 @@ on:
 env:
   AWS_REGION: ap-northeast-2
   TERRAGRUNT_VERSION: 0.55.2
-  TERRAFORM_VERSION: 1.13.0
+  TERRAFORM_VERSION: 1.10.3
 
 jobs:
   format-check:
@@ -25,13 +25,12 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.13.0
+          terraform_version: 1.10.3
 
       - name: Terraform Format Check
         run: |
           echo "🔍 Checking Terraform/HCL formatting..."
           
-          # Terraform 포맷 체크
           if ! terraform fmt -check -recursive; then
             echo ""
             echo "❌ Formatting errors found!"
@@ -46,8 +45,6 @@ jobs:
     name: Terragrunt Plan
     runs-on: ubuntu-latest
     needs: format-check
-    env:
-      TF_PLUGIN_CACHE_DIR: "/tmp/.terraform.d/plugin-cache"
     permissions:
       id-token: write
       contents: read
@@ -106,17 +103,10 @@ jobs:
         uses: shmokmt/actions-setup-tfcmt@v2
         with:
           version: v4.11.0
-
-      - name: Create Terraform plugin cache
-        if: steps.check-changes.outputs.has_changes == 'true'
-        run: |
-          mkdir -p ${{ env.TF_PLUGIN_CACHE_DIR }}
-          echo 'plugin_cache_dir = "${{ env.TF_PLUGIN_CACHE_DIR }}"' > ~/.terraformrc
-
-      - name: Pre-initialize AWS Provider
-        if: steps.check-changes.outputs.has_changes == 'true'
-        run: terraform init -backend=false
-
+      - name: Pre initialize AWS Provider
+        env:
+          TF_PLUGIN_CACHE_DIR: "/tmp/.terraform.d/plugin-cache"
+        run: terragrunt init
       - name: Build terragrunt include directories
         if: steps.check-changes.outputs.has_changes == 'true'
         id: build-include
@@ -138,11 +128,11 @@ jobs:
           
           TF_INCLUDE=$(echo "$TF_INCLUDE" | tr ' ' '\n' | sort -u | tr '\n' ' ')
           
+          echo "Include directories: $TF_INCLUDE"
+          
           if [[ -z "$TF_INCLUDE" ]]; then
-            echo "No terragrunt directories found"
             echo "include_dirs=" >> $GITHUB_OUTPUT
           else
-            echo "Found directories: $TF_INCLUDE"
             echo "include_dirs=$TF_INCLUDE" >> $GITHUB_OUTPUT
           fi
 
@@ -153,17 +143,11 @@ jobs:
         run: |
           cd live
           
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            tfcmt plan -patch -- \
-              terragrunt run-all plan \
-              --terragrunt-non-interactive \
-              ${{ steps.build-include.outputs.include_dirs }}
-          else
-            terragrunt run-all plan \
-              --terragrunt-non-interactive \
-              ${{ steps.build-include.outputs.include_dirs }} \
-              | tee ../plan_output.txt
-          fi
+          terragrunt run-all plan \
+            --terragrunt-non-interactive \
+            --terragrunt-parallelism 1 \
+            ${{ steps.build-include.outputs.include_dirs }} \
+            --terragrunt-tfpath $(pwd)/../gha-tfwrapper.sh
 
       - name: Generate Plan Summary
         if: github.event_name == 'push' && steps.check-changes.outputs.has_changes == 'true'
@@ -176,8 +160,10 @@ jobs:
           done
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Target Directories" >> $GITHUB_STEP_SUMMARY
-          echo "${{ steps.build-include.outputs.include_dirs }}" | tr ' ' '\n' | grep "terragrunt-include-dir" | sed 's/--terragrunt-include-dir //' | while read dir; do
-            echo "- \`$dir\`" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.build-include.outputs.include_dirs }}" | tr ' ' '\n' | sed 's/--terragrunt-include-dir //g' | while read dir; do
+            if [[ -n "$dir" ]]; then
+              echo "- \`$dir\`" >> $GITHUB_STEP_SUMMARY
+            fi
           done
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
