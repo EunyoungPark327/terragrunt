@@ -1,6 +1,6 @@
 # Terragrunt Infrastructure
 
-## 내용 요약 (Summary)
+## Summary
 
 이 레포는 AWS 인프라를 **Terraform + Terragrunt** 로 관리하면서
 
@@ -67,7 +67,7 @@
 
 ## Usage
 
-### 1.Local(optional)
+### 1. Local(optional)
 
 ```bash
 cd live/dev/ec2
@@ -75,14 +75,14 @@ terragrunt plan
 terragrunt apply
 ```
 
-### 2.PR Workflow(Plan)
+### 2. PR Workflow(Plan)
 
 1. ```live/**``` 또는 ```modules/**``` 아래 코드를 수정하고 PR 생성
 2. ```Terragrunt Plan``` 워크플로우가 자동 실행
 3. 각 변경된 Terragrunt 디렉터리에 대해 PR 에 Plan 코멘트가 추가됨
 4. ```Plan: add/change/destroy``` 수와 리소스 변경 내용을 코멘트에서 확인
 
-### 3.Merge -> Apply Workflow
+### 3. Merge -> Apply Workflow
 
 1. PR 리뷰 및 승인
 2. main 브랜치로 머지
