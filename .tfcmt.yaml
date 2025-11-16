@@ -3,6 +3,9 @@ repo_owner: EunyoungPark327
 repo_name: terragrunt
 embedded_var_names:
   - target
+templates:
+  plan_title: |
+    ## {{if eq .ExitCode 1}}:x: {{end}}Plan Result{{if .Vars.target}} ({{ regexReplaceAll "/\\.terragrunt-cache/.*" .Vars.target "" }}){{end}}
 terraform:
   plan:
     disable_label: true

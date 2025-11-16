@@ -9,7 +9,7 @@ shift || true
 base_dir=$(git rev-parse --show-toplevel)
 target=${PWD#"$base_dir"/}
 
-target=${target%%/.terragrunt-cache/*}
+target=$(echo "$target" | sed 's|/\.terragrunt-cache/.*||')
 
 if [ "$command" == "plan" ]; then
   tfcmt -var "target:${target}" plan -patch -- terraform "$command" "$@"
