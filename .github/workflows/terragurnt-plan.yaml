@@ -168,7 +168,7 @@ jobs:
             --terragrunt-tfpath $(pwd)/../gha-tfwrapper.sh
 
       - name: Generate Plan Summary
-        if: github.event_name == 'push' && steps.check-changes.outputs.has_changes == 'true'
+        if: github.event_name == 'push'
         run: |
           echo "## 📋 Terragrunt Plan Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

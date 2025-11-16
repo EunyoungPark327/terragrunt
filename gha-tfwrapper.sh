@@ -12,9 +12,9 @@ target=${PWD#"$base_dir"/}
 target=${target%%/.terragrunt-cache/*}
 
 if [ "$command" == "plan" ]; then
-  tfcmt -var "target:${target}" plan -- terraform "$@"
+  tfcmt -var "target:${target}" plan -patch -- terraform "$command" "$@"
 elif [ "$command" == "apply" ]; then
-  tfcmt -var "target:${target}" apply -- terraform "$@"
+  tfcmt -var "target:${target}" apply -patch -- terraform "$command" "$@"
 else
-  terraform "$@"
+  terraform "$command" "$@"
 fi
