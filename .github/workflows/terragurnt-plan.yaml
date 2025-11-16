@@ -1,0 +1,192 @@
+name: Terragrunt Plan
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'live/**'
+      - 'modules/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'live/**'
+      - 'modules/**'
+
+env:
+  AWS_REGION: ap-northeast-2
+  TERRAGRUNT_VERSION: 0.55.2
+  TERRAFORM_VERSION: 1.7.0
+  TF_PLUGIN_CACHE_DIR: "/tmp/.terraform.d/plugin-cache"
+
+jobs:
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check HCL formatting
+        uses: devops-infra/action-format-hcl@v1.0.1
+        with:
+          list: true
+          write: false
+          check: true
+          recursive: true
+
+  plan:
+    name: Terragrunt Plan
+    runs-on: ubuntu-latest
+    needs: format-check
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed directories
+        id: changed-files
+        uses: tj-actions/changed-files@v47
+        with:
+          dir_names: true
+          dir_names_max_depth: 5
+          files: |
+            live/**/*.hcl
+            modules/**/*.tf
+
+      - name: Check for changes
+        id: check-changes
+        run: |
+          if [[ -z "${{ steps.changed-files.outputs.all_modified_files }}" ]]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "✅ No changes detected"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "📝 Changes detected:"
+            echo "${{ steps.changed-files.outputs.all_modified_files }}"
+          fi
+
+      - name: Configure AWS credentials
+        if: steps.check-changes.outputs.has_changes == 'true'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        if: steps.check-changes.outputs.has_changes == 'true'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Setup Terragrunt
+        if: steps.check-changes.outputs.has_changes == 'true'
+        uses: autero1/action-terragrunt@v3
+        with:
+          terragrunt-version: ${{ env.TERRAGRUNT_VERSION }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup tfcmt
+        if: steps.check-changes.outputs.has_changes == 'true'
+        uses: shmokmt/actions-setup-tfcmt@v2
+        with:
+          version: v4.11.0
+
+      - name: Create Terraform plugin cache
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          mkdir -p ${{ env.TF_PLUGIN_CACHE_DIR }}
+          echo 'plugin_cache_dir = "${{ env.TF_PLUGIN_CACHE_DIR }}"' > ~/.terraformrc
+
+      - name: Pre-initialize AWS Provider
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: terraform init -backend=false
+
+      - name: Build terragrunt include directories
+        if: steps.check-changes.outputs.has_changes == 'true'
+        id: build-include
+        run: |
+          TF_INCLUDE=""
+          
+          # 변경된 파일이 있는 terragrunt 디렉토리 찾기
+          for file in ${{ steps.changed-files.outputs.all_modified_files }}; do
+            # live/ 하위의 terragrunt.hcl이 있는 디렉토리 찾기
+            if [[ "$file" == live/* ]]; then
+              # 파일이 있는 디렉토리에서 terragrunt.hcl 찾기
+              dir=$(dirname "$file")
+              while [[ "$dir" != "live" && "$dir" != "." ]]; do
+                if [[ -f "$dir/terragrunt.hcl" ]]; then
+                  TF_INCLUDE="$TF_INCLUDE --terragrunt-include-dir $dir"
+                  break
+                fi
+                dir=$(dirname "$dir")
+              done
+            fi
+          done
+          
+          # 중복 제거
+          TF_INCLUDE=$(echo "$TF_INCLUDE" | tr ' ' '\n' | sort -u | tr '\n' ' ')
+          
+          if [[ -z "$TF_INCLUDE" ]]; then
+            echo "No terragrunt directories found"
+            echo "include_dirs=" >> $GITHUB_OUTPUT
+          else
+            echo "Found directories: $TF_INCLUDE"
+            echo "include_dirs=$TF_INCLUDE" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Terragrunt Plan
+        if: steps.check-changes.outputs.has_changes == 'true' && steps.build-include.outputs.include_dirs != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd live
+          
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            tfcmt plan -patch -- \
+              terragrunt run-all plan \
+              --terragrunt-non-interactive \
+              ${{ steps.build-include.outputs.include_dirs }}
+          else
+            terragrunt run-all plan \
+              --terragrunt-non-interactive \
+              ${{ steps.build-include.outputs.include_dirs }} \
+              | tee ../plan_output.txt
+          fi
+
+      - name: Generate Plan Summary
+        if: github.event_name == 'push' && steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          echo "## 📋 Terragrunt Plan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Changed Files" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.changed-files.outputs.all_modified_files }}" | tr ' ' '\n' | while read file; do
+            echo "- \`$file\`" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Target Directories" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.build-include.outputs.include_dirs }}" | tr ' ' '\n' | grep "terragrunt-include-dir" | sed 's/--terragrunt-include-dir //' | while read dir; do
+            echo "- \`$dir\`" >> $GITHUB_STEP_SUMMARY
+          done
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Message:** ${{ github.event.head_commit.message }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ⏭️ Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "Go to [Actions → Terragrunt Apply](${{ github.server_url }}/${{ github.repository }}/actions/workflows/terragrunt-apply.yml) to deploy." >> $GITHUB_STEP_SUMMARY
+
+      - name: No changes detected
+        if: steps.check-changes.outputs.has_changes == 'false'
+        run: |
+          echo "## ✅ No Changes Detected" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No Terraform/Terragrunt files were modified in this commit." >> $GITHUB_STEP_SUMMARY
