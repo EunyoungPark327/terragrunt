@@ -19,7 +19,6 @@ env:
   AWS_REGION: ap-northeast-2
   TERRAGRUNT_VERSION: 0.55.2
   TERRAFORM_VERSION: 1.7.0
-  TF_PLUGIN_CACHE_DIR: "/tmp/.terraform.d/plugin-cache"
 
 jobs:
   format-check:
@@ -99,12 +98,6 @@ jobs:
         uses: shmokmt/actions-setup-tfcmt@v2
         with:
           version: v4.11.0
-
-      - name: Create Terraform plugin cache
-        if: steps.check-changes.outputs.has_changes == 'true'
-        run: |
-          mkdir -p ${{ env.TF_PLUGIN_CACHE_DIR }}
-          echo 'plugin_cache_dir = "${{ env.TF_PLUGIN_CACHE_DIR }}"' > ~/.terraformrc
 
       - name: Pre-initialize AWS Provider
         if: steps.check-changes.outputs.has_changes == 'true'
