@@ -26,7 +26,7 @@ jobs:
           write: false
           check: true
           recursive: true
-          dir: terragrunt
+          dir: live, modules
 
   plan:
     name: Terragrunt Plan
