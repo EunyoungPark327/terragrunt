@@ -12,7 +12,7 @@ terraform {
 # T Type 체크
 locals {
   is_t_instance = length(regexall("^t[2-4]g?\\.", var.instance_type)) > 0
-  
+
   # 태그 병합
   merged_tags = merge(
     {
@@ -34,10 +34,10 @@ resource "aws_instance" "this" {
   subnet_id              = var.subnet_id
   vpc_security_group_ids = var.vpc_security_group_ids
   iam_instance_profile   = var.iam_instance_profile
-  
+
   # 모니터링
   monitoring = var.enable_monitoring
-  
+
   ebs_optimized = true
 
   dynamic "credit_specification" {
