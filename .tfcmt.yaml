@@ -1,0 +1,29 @@
+# https://suzuki-shunsuke.github.io/tfcmt/config
+repo_owner: EunyoungPark327
+repo_name: terragrunt
+terraform:
+  plan:
+    disable_label: true
+
+templates:
+  plan_title: |
+    ## {{if eq .ExitCode 1}}❌{{else}}✅{{end}} Terragrunt Plan{{if .Vars.target}} ({{.Vars.target}}){{end}}
+
+  summary_block: |
+    {{if .Result}}
+    **Summary**
+    - Add: {{.Result.Add}}
+    - Change: {{.Result.Change}}
+    - Destroy: {{.Result.Destroy}}
+    {{end}}
+
+  changed_result: |
+    {{template "summary_block" .}}
+
+    <details>
+      <summary>Change Result (상세 보기)</summary>
+
+      ```diff
+      {{template "updated_resources" .}}
+      ```
+    </details>

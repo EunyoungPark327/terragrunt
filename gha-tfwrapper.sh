@@ -4,14 +4,17 @@
 set -euo pipefail
 
 command=$1
+shift || true
 
-base_dir=$(git rev-parse --show-toplevel) # Please fix if necessary
+base_dir=$(git rev-parse --show-toplevel)
 target=${PWD#"$base_dir"/}
 
+target=${target%%/.terragrunt-cache/*}
+
 if [ "$command" == "plan" ]; then
-  tfcmt -var "target:${target}" plan -- terraform "$@"
+  tfcmt -var "target:${target}" plan -patch --disable-label -- terraform plan -no-color "$@"
 elif [ "$command" == "apply" ]; then
   tfcmt -var "target:${target}" apply -- terraform "$@"
 else
-  terraform "$@"
+  terraform "$command" "$@"
 fi
