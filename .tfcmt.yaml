@@ -1,0 +1,15 @@
+# https://suzuki-shunsuke.github.io/tfcmt/config
+repo_owner: EunyoungPark327
+repo_name: terragrunt
+embedded_var_names:
+  - target
+terraform:
+  plan:
+    disable_label: true
+    when_no_changes:
+      disable_comment: true
+  apply:
+    disable_label: true
+    when_no_changes:
+      disable_comment: true
+
