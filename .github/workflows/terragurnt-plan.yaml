@@ -100,10 +100,6 @@ jobs:
         uses: shmokmt/actions-setup-tfcmt@v2
         with:
           version: v4.11.0
-      - name: Pre initialize AWS Provider
-        env:
-          TF_PLUGIN_CACHE_DIR: "/tmp/.terraform.d/plugin-cache"
-        run: terragrunt init
       - name: Build terragrunt include directories
         if: steps.check-changes.outputs.has_changes == 'true'
         id: build-include
